@@ -44,13 +44,39 @@ function buildHeaders(request) {
   return h;
 }
 
-async function upstream(path, method, headers, body) {
-  return fetch(UPSTREAM + path, {
-    method,
-    headers,
-    body,
-    redirect: "follow",
-  });
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function upstream(path, method, headers, body, retries = 3) {
+  let res;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    res = await fetch(UPSTREAM + path, {
+      method,
+      headers,
+      body,
+      redirect: "follow",
+    });
+    if (res.status !== 429 || attempt === retries) return res;
+    await res.body?.cancel();
+    await sleep(250 + attempt * 400);
+  }
+  return res;
+}
+
+async function egressIp() {
+  for (const url of [
+    "https://api.ipify.org?format=json",
+    "https://api64.ipify.org?format=json",
+    "https://ifconfig.me/all.json",
+  ]) {
+    try {
+      const r = await fetch(url, { headers: { Accept: "application/json" } });
+      if (!r.ok) continue;
+      const d = await r.json().catch(() => ({}));
+      const ip = d.ip || d.ip_addr;
+      if (ip) return ip;
+    } catch {}
+  }
+  return null;
 }
 
 function passthrough(res, extra = {}) {
@@ -159,10 +185,22 @@ export default {
             "POST /v1/chat/completions": "OpenAI-compatible chat (streaming SSE)",
             "GET /v1/models": "Model catalog in OpenAI format",
             "GET /v1/chat/models": "Raw model catalog",
+            "GET /ip": "Show worker egress IPs (rotation check)",
             "* /v1/*": "Generic passthrough with headers injected",
           },
           headers_injected: UPSTREAM_HEADERS,
           note: "X-User-ID is auto-generated per request (or pass your own via x-user-id header).",
+        });
+      }
+
+      if (p === "/ip" || p === "/debug/ip") {
+        const ips = await Promise.all(Array.from({ length: 5 }, () => egressIp()));
+        const unique = [...new Set(ips.filter(Boolean))];
+        return json({
+          egress_ips: ips,
+          unique_count: unique.length,
+          rotated: unique.length > 1,
+          note: "Multiple/rotating egress IPs => per-IP rate limit can be spread across them.",
         });
       }
 

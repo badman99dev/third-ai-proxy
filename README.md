@@ -14,6 +14,8 @@ plain OpenAI-style payload — no signup, no manual headers.
   - `GET  /v1/models` — model catalog in OpenAI format
   - `GET  /v1/chat/models` — raw upstream catalog
   - any other `/v1/*` — generic passthrough
+- `GET /ip` — shows worker egress IPs (to verify Cloudflare IP rotation).
+- Auto-retries `429` responses (Cloudflare egress IP may rotate between tries).
 - Full CORS support (works from browser / any client).
 - Passes the SSE stream straight through (no buffering).
 - Optional shared-secret protection via `PROXY_SECRET`.
