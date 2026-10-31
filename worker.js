@@ -208,21 +208,42 @@ export default {
       }
 
       if (p === "/debug/headers") {
-        const r = await fetch("https://httpbin.org/headers", {
-          headers: { Accept: "application/json" },
-        });
-        const data = await r.json().catch(() => ({}));
-        const h = data.headers || {};
-        const injected = Object.keys(h).filter((k) =>
-          /^(cf-|x-forwarded|x-real-ip|true-client-ip|cdn-loop|x-vercel)/i.test(k)
+        const strip = url.searchParams.get("strip") === "1";
+        const tanks = ["https://postman-echo.com/headers", "https://httpbin.org/headers"];
+        const out = { strip_mode: strip, targets: {} };
+        for (const t of tanks) {
+          const h = new Headers({ Accept: "application/json" });
+          if (strip) {
+            for (const k of [
+              "Cf-Ray",
+              "Cf-Worker",
+              "Cdn-Loop",
+              "Cf-Visitor",
+              "Cf-Ew-Via",
+              "X-Forwarded-For",
+              "X-Real-Ip",
+              "Cf-Connecting-Ip",
+              "True-Client-Ip",
+            ]) {
+              h.set(k, "");
+            }
+          }
+          try {
+            const r = await fetch(t, { headers: h });
+            const d = await r.json().catch(() => ({}));
+            out.targets[t] = d.headers || d;
+          } catch (e) {
+            out.targets[t] = "ERR " + e.message;
+          }
+        }
+        const seen = Object.values(out.targets).map((h) =>
+          Object.keys(h || {}).filter((k) => /^cf-|cdn-loop|x-forwarded|x-real-ip/i.test(k))
         );
-        return json({
-          all_headers: h,
-          injected_by_cloudflare: injected,
-          verdict: injected.length
-            ? "Cloudflare injects headers on outbound subrequests — upstream may key rate limit on CF-Connecting-IP."
-            : "No Cloudflare IP headers injected — upstream sees the real egress IP.",
-        });
+        out.cf_headers_still_present = [...new Set(seen.flat())];
+        out.verdict = out.cf_headers_still_present.length
+          ? "Cloudflare still injects these regardless of your headers => cannot be removed from a Worker subrequest."
+          : "Headers successfully stripped.";
+        return json(out);
       }
 
       if (p === "/ip" || p === "/debug/ip") {
