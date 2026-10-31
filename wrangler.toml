@@ -1,0 +1,10 @@
+name = "third-ai-proxy"
+main = "worker.js"
+compatibility_date = "2025-01-01"
+
+# Optional: protect the proxy with a secret key.
+# Set it with:  wrangler secret put PROXY_SECRET
+# Then call with header  x-proxy-key: <secret>  or  ?key=<secret>
+
+[observability]
+enabled = true
