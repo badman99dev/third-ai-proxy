@@ -4,6 +4,12 @@
   "private": true,
   "type": "module",
   "description": "Vercel Edge + Cloudflare Worker proxy for the Appzone AI backend with auto-injected headers",
+  "author": "badman99dev <badman993944@gmail.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/badman99dev/third-ai-proxy.git"
+  },
   "engines": {
     "node": ">=18"
   },
