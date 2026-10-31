@@ -207,6 +207,24 @@ export default {
         });
       }
 
+      if (p === "/debug/headers") {
+        const r = await fetch("https://httpbin.org/headers", {
+          headers: { Accept: "application/json" },
+        });
+        const data = await r.json().catch(() => ({}));
+        const h = data.headers || {};
+        const injected = Object.keys(h).filter((k) =>
+          /^(cf-|x-forwarded|x-real-ip|true-client-ip|cdn-loop|x-vercel)/i.test(k)
+        );
+        return json({
+          all_headers: h,
+          injected_by_cloudflare: injected,
+          verdict: injected.length
+            ? "Cloudflare injects headers on outbound subrequests — upstream may key rate limit on CF-Connecting-IP."
+            : "No Cloudflare IP headers injected — upstream sees the real egress IP.",
+        });
+      }
+
       if (p === "/ip" || p === "/debug/ip") {
         const results = await Promise.all(Array.from({ length: 6 }, () => egressIp()));
         const ips = results.map((r) => (r ? r.ip : null));
