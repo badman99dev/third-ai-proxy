@@ -62,19 +62,33 @@ async function upstream(path, method, headers, body, retries = 3) {
   return res;
 }
 
+const IP_CHECKERS = [
+  { url: "https://checkip.amazonaws.com", parse: (t) => t.trim() },
+  { url: "https://ipinfo.io/ip", parse: (t) => t.trim() },
+  { url: "https://api.myip.com", parse: (t) => (JSON.parse(t).ip || "").trim() },
+  { url: "https://ifconfig.co/ip", parse: (t) => t.trim() },
+  { url: "https://ipv4.icanhazip.com", parse: (t) => t.trim() },
+  { url: "https://ipv6.icanhazip.com", parse: (t) => t.trim() },
+  { url: "https://api.ipify.org?format=json", parse: (t) => (JSON.parse(t).ip || "").trim() },
+  { url: "https://ifconfig.me/all.json", parse: (t) => (JSON.parse(t).ip_addr || "").trim() },
+];
+
+async function egressIpFrom(checker) {
+  try {
+    const r = await fetch(checker.url, { headers: { Accept: "application/json, text/plain, */*" } });
+    if (!r.ok) return null;
+    const t = await r.text();
+    const ip = checker.parse(t);
+    return ip || null;
+  } catch {
+    return null;
+  }
+}
+
 async function egressIp() {
-  for (const url of [
-    "https://api.ipify.org?format=json",
-    "https://api64.ipify.org?format=json",
-    "https://ifconfig.me/all.json",
-  ]) {
-    try {
-      const r = await fetch(url, { headers: { Accept: "application/json" } });
-      if (!r.ok) continue;
-      const d = await r.json().catch(() => ({}));
-      const ip = d.ip || d.ip_addr;
-      if (ip) return ip;
-    } catch {}
+  for (const c of IP_CHECKERS) {
+    const ip = await egressIpFrom(c);
+    if (ip) return { ip, via: c.url };
   }
   return null;
 }
@@ -194,13 +208,15 @@ export default {
       }
 
       if (p === "/ip" || p === "/debug/ip") {
-        const ips = await Promise.all(Array.from({ length: 5 }, () => egressIp()));
+        const results = await Promise.all(Array.from({ length: 6 }, () => egressIp()));
+        const ips = results.map((r) => (r ? r.ip : null));
         const unique = [...new Set(ips.filter(Boolean))];
         return json({
-          egress_ips: ips,
+          samples: results,
+          unique_ips: unique,
           unique_count: unique.length,
           rotated: unique.length > 1,
-          note: "Multiple/rotating egress IPs => per-IP rate limit can be spread across them.",
+          note: "Uses non-Cloudflare checkers (AWS/ipinfo/etc) to see the REAL egress IP. Multiple IPs => per-IP rate limit can be spread.",
         });
       }
 
