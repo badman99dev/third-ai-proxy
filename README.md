@@ -14,9 +14,14 @@ req/min), rotating egress = you can push far more requests per minute.
 ## Layout
 
 ```
-api/                # Vercel Edge Functions (primary)
+api/                # Vercel Edge Functions (primary, explicit routes)
   index.js          #   GET /            -> info
-  [...route].js     #   catch-all router
+  ip.js, models.js, headers.js
+  chat/completions.js, chat/models.js, chat/generate-title.js
+  debug/headers.js
+  web-search/[...path].js
+  extract-text.js, transcribe-audio.js, report-messages.js,
+  submit-rating.js, feedback-event.js, verify-promo-code.js
 lib/proxy.js        # shared logic (headers, upstream, handlers)
 vercel.json         # rewrites: /v1/* -> /api/*
 cloudflare/         # optional Cloudflare Worker version
